@@ -9,11 +9,14 @@
 // @require        http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.13/jquery-ui.min.js
 // @connect        google.com
 // @connect        google.fr
+// @connect        yandex.net
 // @grant 		   GM_log
 // @grant          GM_setValue
 // @grant          GM_getValue
 // @grant          GM_xmlhttpRequest
 // ==/UserScript==
+
+var apiKeyYandex = "trnsl.1.1.20170806T175435Z.827ad939ee5c4c9b.c37457e6961d01189456a27418d4892a0399a9db";
 
 /*
  * Cross browser support for GM functions
@@ -104,12 +107,16 @@ function main() {
 						//alert('checkselectabletext strs: ' + strs.join(","));
 					var translationSpan = document.createElement("span");
 					translationSpan.className = "translation";
+					translationSpan.style.fontStyle = "italic"
 					var button = document.createElement("button");
 					button.innerHTML = " TR ";
 					translationSpan.appendChild(button);
 					selectableText.after($(translationSpan));
 					button.addEventListener ("click", function() {
 						try {
+							var breakElement = document.createElement("br");
+							selectableText.after($(breakElement));
+							button.parentNode.removeChild(button);
 							translate(strs, $(translationSpan));
 						} catch (e) {
 							console.log(e);
@@ -138,26 +145,41 @@ function translate(strs, span)
 	}
 	span.text("...");
 
-	var srcText = "bonjour"; // strs[2];
+	var srcText = strs[2];
+	var srcTextEncoded = encodeURIComponent(srcText);
 	var sl = "auto"; // GM_getValue('from') ? GM_getValue('from') : "auto";
 	var tl = "en"; // GM_getValue('to') ? GM_getValue('to') : "auto";
-	var lang = sl + "|" + tl;
-	//currentURL = "http://www.google.com/translate_t?text=" + encodeURIComponent(txtSel) + "&langpair=" + lang; // Basic address, for web page parsing
-	//currentURL = "http://translate.google.fr/translate_a/t?client=t&text=" + encodeURIComponent(txtSel) + "&langpair=" + lang; // URL for GET request. This adress return an array as answer
-	var currentPostData = "client=t&text=" + encodeURIComponent(srcText) + "&langpair=" + lang; // Data for a POST request, for handling long requests
+	
+	// google
+	//var lang = sl + "|" + tl;
+	//requestURL = "http://www.google.com/translate_t?text=" + encodeURIComponent(txtSel) + "&langpair=" + lang; // Basic address, for web page parsing
+	//requestURL = "http://translate.google.fr/translate_a/t?client=t&text=" + encodeURIComponent(txtSel) + "&langpair=" + lang; // URL for GET request. This adress return an array as answer	
+	//var requestUrl = 'http://translate.google.com/translate_a/t';
+	//var requestPostData = "client=J&text=" + encodeURIComponent(srcText) + "&langpair=" + lang; // Data for a POST request, for handling long request	
+	//var requestUrl = 'http://translate.google.com/translate_a/single';
+	//var requestPostData = "client=t&dt=t&text=" + encodeURIComponent(srcText) + "&langpair=" + lang; // Data for a POST request, for handling long requests	
+	//var requestUrl = 'http://translate.google.com/translate_a/t';
+	//var requestPostData = "client=j&text=Life&hl=en&sl=en&tl=hi%20HTTP/1.1"
+	
+	var requestMethod = 'POST';
+	var requestUrl = "https://translate.yandex.net/api/v1.5/tr.json/translate";
+	var requestPostData = "key="+apiKeyYandex+"&text="+srcTextEncoded+"&lang="+tl+"&format=plain&options=1";
+	var requestHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+	var debugRequestString = requestMethod + ": " + requestUrl + "?" + requestPostData;
+	console.log(debugRequestString);
+		
 	GM_xmlhttpRequest({
-        /*method: 'GET',
-        url: currentURL,*/
-		method: 'GET',
-		url : 'http://translate.google.com/translate_a/t',
-		data: currentPostData,
-		headers: {
-			'Content-Type': 'application/x-www-form-urlencoded'
-		},
+        method: requestMethod,
+		url : requestUrl,
+		data: requestPostData,
+		headers: requestHeaders,
         onload: function(resp) {
             try {
-                span.text("complete");
-                var translation = extractResultDom(resp.responseText);
+ 				console.log(resp);
+ 				var respObject = JSON.parse(resp.responseText);
+                span.text("[from "+respObject.detected.lang.toUpperCase()+":]" + respObject.text[0]);
+                //var translation = extractResultDom(resp.responseText);
 				//alert("translation: " + translation);
             } catch(e) {
             	//alert(resp.responseText);
