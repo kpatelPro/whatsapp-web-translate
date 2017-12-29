@@ -2,7 +2,7 @@
 // @name           WhatsApp Translate
 // @description    Translates WhatsApp chat messages
 // @match          https://web.whatsapp.com/
-// @version        0.2.7
+// @version        0.3.0
 // @updateURL      https://github.com/kpatelPro/whatsapp-web-translate/raw/master/WhatsAppTranslate.user.js
 // @downloadURL    https://github.com/kpatelPro/whatsapp-web-translate/raw/master/WhatsAppTranslate.user.js
 // @require        http://code.jquery.com/jquery-1.7.2.min.js
@@ -40,7 +40,7 @@ function main() {
 			var message;
 			var targetLanguage;
 			var uiAlignment;
-			
+
 			// switch options based on message-in or message-out
 			var messageIn = $(msg).children(".message.message-in").first();
 			var messageOut = $(msg).children(".message.message-out").first();
@@ -53,7 +53,7 @@ function main() {
 				message = messageOut;
 				targetLanguage = learningLanguage;
 				uiAlignment = "right";
-			} 
+			}
 
 			if ((typeof message != 'undefined') && (message !== null)) {
 				var bubbleText = $(message).find(".bubble.bubble-text").first();
@@ -63,7 +63,7 @@ function main() {
 			}
 		});
 	};
-	
+
 	var lastMsgCheck = function(obj) {
 		var summary = obj[0];
 		summary.added.forEach(function(msg) {
@@ -74,7 +74,7 @@ function main() {
 			}
 		});
 	};
-	
+
 
 	var msgObserver = new MutationSummary({
 		callback: msgCheck,
@@ -99,23 +99,17 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, ta
 		//alert('no html');
 		return;
 	}
-	
+
 	var strs = html.split(/(<!--.+?(?=-->)-->)/g);
 	if ((typeof strs == 'undefined') || (strs === null)) {
 		//alert('no split strs for: ' + html);
 		return;
 	}
 
-	//alert('checkBubble strs: ' + strs.join(","));
-	if (strs.length != 5) {
-		//alert("strs.length " + strs.length + ": " + strs.join("\n--> "));
-		return;
-	}
-
 	var translationSpan = document.createElement("span");
 	translationSpan.width = "100%";
 	translationSpan.style.fontStyle = "italic";
-	translationSpan.style.color = "darkgrey";
+	translationSpan.style.color = "black"; //"darkgrey";
 	translationSpan.className = "translation-span";
 	messageEmojiText.siblings(".translation-span").remove();
 	messageEmojiText.after($(translationSpan));
@@ -137,6 +131,7 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, ta
 			var breakElement = document.createElement("br");
 			messageEmojiText.after($(breakElement));
 			translationSpan.innerHtml = "...";
+			translationSpan.style.opacity = 0.75;
 			handleTranslationRequest(strs, targetLanguage, $(translationSpan), $(translationUI));
 		} catch (e) {
 			console.log(e);
@@ -146,11 +141,9 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, ta
 
 function handleTranslationRequest(strs, targetLanguage, span, ui)
 {
-	var srcText = strs[2];
-	var srcTextEncoded = encodeURIComponent(srcText);
 	var sl = "auto"; // GM_getValue('from') ? GM_getValue('from') : "auto";
 	var tl = targetLanguage; // "en"; // GM_getValue('to') ? GM_getValue('to') : "auto";
-	
+
 	// google
 	//var lang = sl + "|" + tl;
 	//var requestUrl = 'http://translate.google.com/translate_a/single';
@@ -162,11 +155,32 @@ function handleTranslationRequest(strs, targetLanguage, span, ui)
 	var apiKeyYandex = "trnsl.1.1.20170806T175435Z.827ad939ee5c4c9b.c37457e6961d01189456a27418d4892a0399a9db";
 	var requestMethod = 'POST';
 	var requestUrl = "https://translate.yandex.net/api/v1.5/tr.json/translate";
-	var requestPostData = "key="+apiKeyYandex+"&text="+srcTextEncoded+"&lang="+tl+"&format=plain&options=1";
+	var requestPostData = "key="+apiKeyYandex+"&lang="+tl+"&format=plain&options=1";
 	var requestHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
 
+	// add string requests:
+	var s=0,count=0;
+	for (s=0; s<strs.length; ++s)
+	{
+		var srcText = strs[s];
+		//console.log('checking: ' + strs[s]);
+		if ((srcText.length > 0) && (srcText[0] != '<'))
+		{
+			var srcTextEncoded = encodeURIComponent(srcText);
+			//console.log('adding: ' + srcTextEncoded);
+			requestPostData += "&text="+srcTextEncoded;
+			count++;
+		}
+	}
+	if (count === 0)
+	{
+		//console.log('nothing to translate');
+		return;
+	}
+
 	//var debugRequestString = requestMethod + ": " + requestUrl + "?" + requestPostData;
-	//console.log(debugRequestString);
+	var debugRequestString = requestMethod + ": " + requestUrl + "?" + requestPostData;
+	console.log(debugRequestString);
 
 	GM_xmlhttpRequest({
         method: requestMethod,
@@ -180,7 +194,18 @@ function handleTranslationRequest(strs, targetLanguage, span, ui)
  				// yandex
  				var respObject = JSON.parse(resp.responseText);
                 //span.text("["+respObject.detected.lang.toUpperCase()+"] " + respObject.text[0]);
-                span.text(respObject.text[0]);
+				var s=0,count=0;
+				for (s=0; (count < respObject.text.length) && (s<strs.length); ++s)
+				{
+					var srcText = strs[s];
+					if ((srcText.length > 0) && (srcText[0] != '<'))
+					{
+						strs[s] = escapeHtml(respObject.text[count]);
+						count++;
+					}
+				}
+				var newHtml = strs.join('');
+                span.html(newHtml);
                 //ui.text("["+respObject.detected.lang.toUpperCase()+"]");
 
             } catch(e) {
@@ -295,4 +320,21 @@ function xp(p, context, doc) {
 
 function trim(str) {
 	return str.replace(/^\s+/,'').replace(/\s+$/,'');
+}
+
+var entityMap = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '/': '&#x2F;',
+  '`': '&#x60;',
+  '=': '&#x3D;'
+};
+
+function escapeHtml (string) {
+  return String(string).replace(/[&<>"'`=\/]/g, function (s) {
+    return entityMap[s];
+  });
 }
