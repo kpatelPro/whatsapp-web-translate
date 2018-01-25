@@ -2,7 +2,7 @@
 // @name           WhatsApp Translate
 // @description    Translates WhatsApp chat messages
 // @match          https://web.whatsapp.com/
-// @version        0.3.0
+// @version        0.3.1
 // @updateURL      https://github.com/kpatelPro/whatsapp-web-translate/raw/master/WhatsAppTranslate.user.js
 // @downloadURL    https://github.com/kpatelPro/whatsapp-web-translate/raw/master/WhatsAppTranslate.user.js
 // @require        http://code.jquery.com/jquery-1.7.2.min.js
@@ -15,8 +15,11 @@
 // ==/UserScript==
 
 var once = true;
-var nativeLanguage = "en";
-var learningLanguage = "es";
+var gNativeLanguage = "en";
+var gLearningLanguage = "es";
+var gTranslateMessages = true;
+var gTranslateMessagesOutgoing = true;
+var gTranslateStatuses = false; // currently buggy due to reuse(???) of elements
 
 function addjQuery(callback) {
 	var script = document.createElement("script");
@@ -47,19 +50,19 @@ function main() {
 			//if ((typeof messageOut != 'undefined') && (messageOut !== null)) {
 			if (messageIn.length) {
 				message = messageIn;
-				targetLanguage = nativeLanguage;
+				targetLanguage = gNativeLanguage;
 				uiAlignment = "left";
 			} else if (messageOut.length) { //false && (typeof messageIn != 'undefined') && (messageIn !== null)) {
-				message = messageOut;
-				targetLanguage = learningLanguage;
+				message = gTranslateMessagesOutgoing ? messageOut : null;
+				targetLanguage = gLearningLanguage;
 				uiAlignment = "right";
 			}
 
 			if ((typeof message != 'undefined') && (message !== null)) {
-				var bubbleText = $(message).find(".bubble.bubble-text").first();
+				//var bubbleText = $(message).find(".bubble.bubble-text").first();
 			    //var messageText = $(bubbleText).children(".message-text").first();
-			    var messageEmojiText = $(bubbleText).find(".emojitext.copyable-text").first();
-			    manipulateMessageElement(messageEmojiText, message, uiAlignment, targetLanguage);
+			    var messageEmojiText = $(message).find(".emojitext.selectable-text.copyable-text").first();
+			    manipulateMessageElement(messageEmojiText, message, uiAlignment, messageEmojiText, null, targetLanguage);
 			}
 		});
 	};
@@ -69,30 +72,32 @@ function main() {
 		summary.added.forEach(function(msg) {
 			var lastMsg = $(msg);
 			if ((typeof lastMsg != 'undefined') && (lastMsg !== null)) {
-			    var messageEmojiText = $(lastMsg).find(".emojitext.ellipsify").first();
-			    manipulateMessageElement(messageEmojiText, lastMsg, "right", nativeLanguage);
+			    var messageEmojiText = $(lastMsg).find(".ellipsify").first();
+			    manipulateMessageElement(messageEmojiText, lastMsg, "right", lastMsg, "ellipsify", gNativeLanguage);
 			}
 		});
 	};
 
-
-	var msgObserver = new MutationSummary({
-		callback: msgCheck,
-		queries: [{
-			element: '.msg'
-		}]
-	});
-
-	var lastMsgObserver = new MutationSummary({
-		callback: lastMsgCheck,
-		queries: [{
-			element: '.chat-status'
-		}]
-	});
-
+	if (gTranslateMessages) {
+		var msgObserver = new MutationSummary({
+			callback: msgCheck,
+			queries: [{
+				element: '.msg'
+			}]
+		});
+	}
+	
+	if (gTranslateStatuses) {
+		var lastMsgObserver = new MutationSummary({
+			callback: lastMsgCheck,
+			queries: [{
+				element: '.chat-status'
+			}]
+		});
+	}
 }
 
-function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, targetLanguage)
+function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, translationParent, additionalClasses, targetLanguage)
 {
     var html = messageEmojiText.html();
 	if ((typeof html == 'undefined') || (html === null)) {
@@ -100,7 +105,10 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, ta
 		return;
 	}
 
-	var strs = html.split(/(<!--.+?(?=-->)-->)/g);
+	//previously had these delimiters: 
+	//var strs = html.split(/(<!--.+?(?=-->)-->)/g);
+	//now just look for embedded dom elements
+	var strs = html.split(/(<.+?(?=>)>)/g);
 	if ((typeof strs == 'undefined') || (strs === null)) {
 		//alert('no split strs for: ' + html);
 		return;
@@ -111,8 +119,11 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, ta
 	translationSpan.style.fontStyle = "italic";
 	translationSpan.style.color = "black"; //"darkgrey";
 	translationSpan.className = "translation-span";
-	messageEmojiText.siblings(".translation-span").remove();
-	messageEmojiText.after($(translationSpan));
+	if (additionalClasses) {
+		translationSpan.className += " " + additionalClasses;
+	}
+	translationParent.siblings(".translation-span").remove();
+	translationParent.after($(translationSpan));
 	
 	var translationUI = document.createElement("span");
 	translationUI.className = "translation-ui";
