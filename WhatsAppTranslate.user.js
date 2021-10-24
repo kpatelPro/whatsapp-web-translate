@@ -5,9 +5,9 @@
 // @version        0.3.1
 // @updateURL      https://github.com/kpatelPro/whatsapp-web-translate/raw/master/WhatsAppTranslate.user.js
 // @downloadURL    https://github.com/kpatelPro/whatsapp-web-translate/raw/master/WhatsAppTranslate.user.js
-// @require        http://code.jquery.com/jquery-1.7.2.min.js
+// @require        https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js
 // @require        http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.13/jquery-ui.min.js
-// @connect        yandex.net
+// @connect        libretranslate.de
 // @grant 		   GM_log
 // @grant          GM_setValue
 // @grant          GM_getValue
@@ -41,28 +41,28 @@ function main() {
 		var summary = obj[0];
 		summary.added.forEach(function(msg) {
 			var message;
+            var srcLanguage;
 			var targetLanguage;
 			var uiAlignment;
 
 			// switch options based on message-in or message-out
-			var messageIn = $(msg).children(".message.message-in").first();
-			var messageOut = $(msg).children(".message.message-out").first();
+			message = $(msg);
 			//if ((typeof messageOut != 'undefined') && (messageOut !== null)) {
-			if (messageIn.length) {
-				message = messageIn;
+			if (message.hasClass("message-in")) {
+                srcLanguage = gLearningLanguage;
 				targetLanguage = gNativeLanguage;
-				uiAlignment = "left";
-			} else if (messageOut.length) { //false && (typeof messageIn != 'undefined') && (messageIn !== null)) {
-				message = gTranslateMessagesOutgoing ? messageOut : null;
+				uiAlignment = "flex-start";
+			} else if (message.hasClass("message-out")) { //false && (typeof messageIn != 'undefined') && (messageIn !== null)) {
+                srcLanguage = gNativeLanguage;
 				targetLanguage = gLearningLanguage;
-				uiAlignment = "right";
+				uiAlignment = "flex-end";
 			}
 
 			if ((typeof message != 'undefined') && (message !== null)) {
 				//var bubbleText = $(message).find(".bubble.bubble-text").first();
 			    //var messageText = $(bubbleText).children(".message-text").first();
-			    var messageEmojiText = $(message).find(".emojitext.selectable-text.copyable-text").first();
-			    manipulateMessageElement(messageEmojiText, message, uiAlignment, messageEmojiText, null, targetLanguage);
+			    var messageEmojiText = $(message).find(".selectable-text.copyable-text").first();
+			    manipulateMessageElement(messageEmojiText, message, uiAlignment, messageEmojiText, null, srcLanguage, targetLanguage);
 			}
 		});
 	};
@@ -79,14 +79,20 @@ function main() {
 	};
 
 	if (gTranslateMessages) {
-		var msgObserver = new MutationSummary({
+		var msgObserverIn = new MutationSummary({
 			callback: msgCheck,
 			queries: [{
-				element: '.msg'
+				element: '.message-in'
+			}]
+		});
+		var msgObserverOut = new MutationSummary({
+			callback: msgCheck,
+			queries: [{
+				element: '.message-out'
 			}]
 		});
 	}
-	
+
 	if (gTranslateStatuses) {
 		var lastMsgObserver = new MutationSummary({
 			callback: lastMsgCheck,
@@ -97,24 +103,24 @@ function main() {
 	}
 }
 
-function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, translationParent, additionalClasses, targetLanguage)
+function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, translationParent, additionalClasses, srcLanguage, targetLanguage)
 {
-    var html = messageEmojiText.html();
-	if ((typeof html == 'undefined') || (html === null)) {
+    var txt = messageEmojiText.text();
+	if ((typeof txt == 'undefined') || (txt === null)) {
 		//alert('no html');
 		return;
 	}
 
-	//previously had these delimiters: 
+	//previously had these delimiters:
 	//var strs = html.split(/(<!--.+?(?=-->)-->)/g);
 	//now just look for embedded dom elements
-	var strs = html.split(/(<.+?(?=>)>)/g);
+	var strs = txt.split(/(<.+?(?=>)>)/g);
 	if ((typeof strs == 'undefined') || (strs === null)) {
 		//alert('no split strs for: ' + html);
 		return;
 	}
 
-	var translationSpan = document.createElement("span");
+	var translationSpan = document.createElement("div");
 	translationSpan.width = "100%";
 	translationSpan.style.fontStyle = "italic";
 	translationSpan.style.color = "black"; //"darkgrey";
@@ -122,32 +128,68 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, tr
 	if (additionalClasses) {
 		translationSpan.className += " " + additionalClasses;
 	}
-	translationParent.siblings(".translation-span").remove();
+// 	translationParent.siblings(".translation-span").remove();
 	translationParent.after($(translationSpan));
-	
+
 	var translationUI = document.createElement("span");
 	translationUI.className = "translation-ui";
-	uiParent.siblings(".translation-ui").remove();
+    translationUI.style.display = "flex";
+    translationUI.style.justifyContent = cssFloatButton;
+    translationUI.style.marginTop = "-60px";
+    translationUI.style.padding = "25px";
+// 	uiParent.siblings(".translation-ui").remove();
 	uiParent.after($(translationUI));
 
 	var translateButton = document.createElement("button");
 	translationUI.appendChild(translateButton);
 	translateButton.className = "translation-button";
-	translateButton.style.cssFloat = cssFloatButton;
+// 	translateButton.style.cssFloat = cssFloatButton;
 	translateButton.style.backgroundColor = "whitesmoke";
-	translateButton.innerHTML = "TR";
+	translateButton.style.zIndex = "1";
+	translateButton.innerHTML = "Translate";
 	translateButton.addEventListener ("click", function() {
 		try {
-			translateButton.parentNode.removeChild(translateButton);
-			var breakElement = document.createElement("br");
-			messageEmojiText.after($(breakElement));
+			$(translateButton).hide();
 			translationSpan.innerHtml = "...";
 			translationSpan.style.opacity = 0.75;
-			handleTranslationRequest(strs, targetLanguage, $(translationSpan), $(translationUI));
+            translate(strs.join(" "), srcLanguage, targetLanguage, $(translationSpan),translateButton);
+// 			handleTranslationRequest(strs, targetLanguage, $(translationSpan), $(translationUI));
 		} catch (e) {
-			console.log(e);
+			console.error(e);
 		}
 	});
+}
+function translate(str, sourceLanguage, targetLanguage, span, translateButton){
+	const body = JSON.stringify({
+		q: str,
+		source: sourceLanguage,
+		target: targetLanguage,
+		format: "text"
+	});
+
+	GM_xmlhttpRequest({
+        method: "POST",
+		url : "https://libretranslate.de/translate",
+		data: body,
+		headers: { "Content-Type": "application/json" },
+        onload: function(resp) {
+            //  				console.log("RESPONSE: " + JSON.stringify(resp));
+            console.log("body:", body);
+            console.log("text:", resp.responseText);
+
+            var respObject = JSON.parse(resp.responseText);
+            if(respObject.error){
+                span.html("...Error");
+                $(translateButton).show();
+                console.error(respObject.error);
+            }
+            else{
+                var newHtml = respObject.translatedText;
+                span.html(newHtml);
+                $(translateButton).remove();
+            }
+        }
+    });
 }
 
 function handleTranslationRequest(strs, targetLanguage, span, ui)
@@ -158,7 +200,7 @@ function handleTranslationRequest(strs, targetLanguage, span, ui)
 	// google
 	//var lang = sl + "|" + tl;
 	//var requestUrl = 'http://translate.google.com/translate_a/single';
-	//var requestPostData = "client=t&dt=t&text=" + encodeURIComponent(srcText) + "&langpair=" + lang; // Data for a POST request, for handling long requests	
+	//var requestPostData = "client=t&dt=t&text=" + encodeURIComponent(srcText) + "&langpair=" + lang; // Data for a POST request, for handling long requests
 	//var requestUrl = 'http://translate.google.com/translate_a/t';
 	//var requestPostData = "client=j&text=Life&hl=en&sl=en&tl=hi%20HTTP/1.1"
 
