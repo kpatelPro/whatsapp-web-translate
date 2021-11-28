@@ -62,7 +62,7 @@ function main() {
 				//var bubbleText = $(message).find(".bubble.bubble-text").first();
 			    //var messageText = $(bubbleText).children(".message-text").first();
 			    var messageEmojiText = $(message).find(".selectable-text.copyable-text").first();
-			    manipulateMessageElement(messageEmojiText, message, uiAlignment, messageEmojiText, null, srcLanguage, targetLanguage);
+			    manipulateMessageElement(messageEmojiText, message, uiAlignment, messageEmojiText, "selectable-text copyable-text", srcLanguage, targetLanguage);
 			}
 		});
 	};
@@ -114,11 +114,13 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, tr
 	//previously had these delimiters:
 	//var strs = html.split(/(<!--.+?(?=-->)-->)/g);
 	//now just look for embedded dom elements
-	var strs = txt.split(/(<.+?(?=>)>)/g);
-	if ((typeof strs == 'undefined') || (strs === null)) {
+	const strs = txt.split(/(<.+?(?=>)>)/g);
+    const str = strs.join("");
+	if ((typeof strs == 'undefined') || (strs === null) || (str.length === 0)) {
 		//alert('no split strs for: ' + html);
 		return;
 	}
+    console.log("string to translate " +str + " - "+ str.length + " letters")
 
 	var translationSpan = document.createElement("div");
 	translationSpan.width = "100%";
@@ -149,17 +151,17 @@ function manipulateMessageElement(messageEmojiText, uiParent, cssFloatButton, tr
 	translateButton.innerHTML = "Translate";
 	translateButton.addEventListener ("click", function() {
 		try {
-			$(translateButton).hide();
+			$(translationUI).fadeOut();
 			translationSpan.innerHtml = "...";
 			translationSpan.style.opacity = 0.75;
-            translate(strs.join(" "), srcLanguage, targetLanguage, $(translationSpan),translateButton);
+            translate(strs.join(" "), srcLanguage, targetLanguage, $(translationSpan),$(translationUI));
 // 			handleTranslationRequest(strs, targetLanguage, $(translationSpan), $(translationUI));
 		} catch (e) {
 			console.error(e);
 		}
 	});
 }
-function translate(str, sourceLanguage, targetLanguage, span, translateButton){
+function translate(str, sourceLanguage, targetLanguage, span, translationUI){
 	const body = JSON.stringify({
 		q: str,
 		source: sourceLanguage,
@@ -180,13 +182,15 @@ function translate(str, sourceLanguage, targetLanguage, span, translateButton){
             var respObject = JSON.parse(resp.responseText);
             if(respObject.error){
                 span.html("...Error");
-                $(translateButton).show();
+                translationUI.fadeIn();
                 console.error(respObject.error);
             }
             else{
                 var newHtml = respObject.translatedText;
+                span.hide();
                 span.html(newHtml);
-                $(translateButton).remove();
+                span.fadeIn();
+                translationUI.remove();
             }
         }
     });
